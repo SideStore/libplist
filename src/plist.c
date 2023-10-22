@@ -44,8 +44,8 @@
 
 #include <node.h>
 #include <node_list.h>
-#include <hashtable.h>
-#include <ptrarray.h>
+#include "hashtable.h"
+#include "ptrarray.h"
 
 #ifdef _MSC_VER
 typedef SSIZE_T ssize_t;
