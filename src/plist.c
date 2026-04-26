@@ -953,8 +953,7 @@ plist_t plist_copy(plist_t node)
 uint32_t plist_array_get_size(plist_t node)
 {
     uint32_t ret = 0;
-    if (node && PLIST_ARRAY == plist_get_node_type(node))
-    {
+    if (PLIST_IS_ARRAY(node)) {
         ret = node_n_children((node_t)node);
     }
     return ret;
@@ -963,8 +962,7 @@ uint32_t plist_array_get_size(plist_t node)
 plist_t plist_array_get_item(plist_t node, uint32_t n)
 {
     plist_t ret = NULL;
-    if (node && PLIST_ARRAY == plist_get_node_type(node) && n < INT_MAX)
-    {
+    if (PLIST_IS_ARRAY(node) && n < INT_MAX) {
         ptrarray_t *pa = (ptrarray_t*)((plist_data_t)((node_t)node)->data)->hashtable;
         if (pa) {
             ret = (plist_t)ptr_array_index(pa, n);
@@ -977,10 +975,9 @@ plist_t plist_array_get_item(plist_t node, uint32_t n)
 
 uint32_t plist_array_get_item_index(plist_t node)
 {
-    plist_t father = plist_get_parent(node);
-    if (PLIST_ARRAY == plist_get_node_type(father))
-    {
-        return node_child_position((node_t)father, (node_t)node);
+    plist_t parent = plist_get_parent(node);
+    if (PLIST_IS_ARRAY(parent)) {
+        return node_child_position((node_t)parent, (node_t)node);
     }
     return UINT_MAX;
 }
@@ -1039,25 +1036,25 @@ static void _plist_array_post_set(plist_t node, plist_t item, long n)
     }
 }
 
-void plist_array_set_item(plist_t node, plist_t item, uint32_t n)
+plist_err_t plist_array_set_item(plist_t node, plist_t item, uint32_t n)
 {
     if (!PLIST_IS_ARRAY(node) || !item || n >= INT_MAX) {
         PLIST_ERR("invalid argument passed to %s (node=%p, item=%p, n=%u)\n", __func__, node, item, n);
-        return;
+        return PLIST_ERR_INVALID_ARG;
     }
     node_t it = (node_t)item;
     if (it->parent != NULL) {
         assert(it->parent == NULL && "item already has a parent; use plist_copy() or detach first");
         PLIST_ERR("%s: item already has a parent; use plist_copy() or detach first\n", __func__);
-        return;
+        return PLIST_ERR_INVALID_ARG;
     }
     plist_t old_item = plist_array_get_item(node, n);
-    if (!old_item) return;
+    if (!old_item) return PLIST_ERR_INVALID_ARG;
 
     int idx = node_detach((node_t)node, (node_t)old_item);
     if (idx < 0) {
         PLIST_ERR("%s: Failed to detach old item (err=%d)\n", __func__, idx);
-        return;
+        return PLIST_ERR_UNKNOWN;
     }
 
     int r = node_insert((node_t)node, (unsigned)idx, (node_t)item);
@@ -1066,87 +1063,99 @@ void plist_array_set_item(plist_t node, plist_t item, uint32_t n)
         if (rb == NODE_ERR_SUCCESS) {
             _plist_array_post_set(node, old_item, idx); // restore cache correctly
             PLIST_ERR("%s: failed to insert replacement (idx=%d err=%d); rollback succeeded\n", __func__, idx, r);
+            return (r == NODE_ERR_NO_MEM) ? PLIST_ERR_NO_MEM : PLIST_ERR_UNKNOWN;
         } else {
             PLIST_ERR("%s: insert failed (err=%d) and rollback failed (err=%d); array now missing element at idx=%d\n", __func__, r, rb, idx);
+            return PLIST_ERR_UNKNOWN;
         }
-        return;
     }
 
     _plist_array_post_set(node, item, idx); // update cache
     plist_free_node((node_t)old_item);
+
+    return PLIST_ERR_SUCCESS;
 }
 
-void plist_array_append_item(plist_t node, plist_t item)
+plist_err_t plist_array_append_item(plist_t node, plist_t item)
 {
     if (!PLIST_IS_ARRAY(node) || !item) {
         PLIST_ERR("invalid argument passed to %s (node=%p, item=%p)\n", __func__, node, item);
-        return;
+        return PLIST_ERR_INVALID_ARG;
     }
     node_t it = (node_t)item;
     if (it->parent != NULL) {
         assert(it->parent == NULL && "item already has a parent; use plist_copy() or detach first");
         PLIST_ERR("%s: item already has a parent; use plist_copy() or detach first\n", __func__);
-        return;
+        return PLIST_ERR_INVALID_ARG;
     }
 
     int r = node_attach((node_t)node, (node_t)item);
     if (r != NODE_ERR_SUCCESS) {
         PLIST_ERR("%s: failed to append item (err=%d)\n", __func__, r);
-        return;
+        return PLIST_ERR_UNKNOWN;
     }
     _plist_array_post_insert(node, item, -1);
+
+    return PLIST_ERR_SUCCESS;
 }
 
-void plist_array_insert_item(plist_t node, plist_t item, uint32_t n)
+plist_err_t plist_array_insert_item(plist_t node, plist_t item, uint32_t n)
 {
     if (!PLIST_IS_ARRAY(node) || !item || n >= INT_MAX) {
         PLIST_ERR("invalid argument passed to %s (node=%p, item=%p, n=%u)\n", __func__, node, item, n);
-        return;
+        return PLIST_ERR_INVALID_ARG;
     }
     node_t it = (node_t)item;
     if (it->parent != NULL) {
         assert(it->parent == NULL && "item already has a parent; use plist_copy() or detach first");
         PLIST_ERR("%s: item already has a parent; use plist_copy() or detach first\n", __func__);
-        return;
+        return PLIST_ERR_INVALID_ARG;
     }
 
     int r = node_insert((node_t)node, n, (node_t)item);
     if (r != NODE_ERR_SUCCESS) {
         PLIST_ERR("%s: Failed to insert item at index %u (err=%d)\n", __func__, n, r);
-        return;
+        return PLIST_ERR_UNKNOWN;
     }
     _plist_array_post_insert(node, item, (long)n);
+
+    return PLIST_ERR_SUCCESS;
 }
 
-void plist_array_remove_item(plist_t node, uint32_t n)
+plist_err_t plist_array_remove_item(plist_t node, uint32_t n)
 {
-    if (node && PLIST_ARRAY == plist_get_node_type(node) && n < INT_MAX)
-    {
-        plist_t old_item = plist_array_get_item(node, n);
-        if (old_item)
-        {
-            ptrarray_t* pa = (ptrarray_t*)((plist_data_t)((node_t)node)->data)->hashtable;
-            if (pa) {
-                ptr_array_remove(pa, n);
-            }
-            plist_free(old_item);
-        }
+    if (!PLIST_IS_ARRAY(node) || n >= INT_MAX || n > plist_array_get_size(node)) {
+        PLIST_ERR("invalid argument passed to %s (node=%p, n=%u)\n", __func__, node, n);
+        return PLIST_ERR_INVALID_ARG;
     }
+
+    plist_t old_item = plist_array_get_item(node, n);
+    if (!old_item) {
+        PLIST_ERR("item not found at index %u\n", n);
+        return PLIST_ERR_INVALID_ARG;
+    }
+    ptrarray_t* pa = (ptrarray_t*)((plist_data_t)((node_t)node)->data)->hashtable;
+    if (pa) {
+        ptr_array_remove(pa, n);
+    }
+    plist_free(old_item);
+
+    return PLIST_ERR_SUCCESS;
 }
 
-void plist_array_item_remove(plist_t node)
+plist_err_t plist_array_item_remove(plist_t item)
 {
-    plist_t father = plist_get_parent(node);
-    if (PLIST_ARRAY == plist_get_node_type(father))
-    {
-        int n = node_child_position((node_t)father, (node_t)node);
-        if (n < 0) return;
-        ptrarray_t* pa = (ptrarray_t*)((plist_data_t)((node_t)father)->data)->hashtable;
+    plist_t parent = plist_get_parent(item);
+    if (PLIST_IS_ARRAY(parent)) {
+        int n = node_child_position((node_t)parent, (node_t)item);
+        if (n < 0) return PLIST_ERR_INVALID_ARG;
+        ptrarray_t* pa = (ptrarray_t*)((plist_data_t)((node_t)parent)->data)->hashtable;
         if (pa) {
             ptr_array_remove(pa, n);
         }
-        plist_free(node);
+        plist_free(item);
     }
+    return PLIST_ERR_SUCCESS;
 }
 
 typedef struct {
@@ -1189,8 +1198,7 @@ void plist_array_free_iter(plist_array_iter iter)
 uint32_t plist_dict_get_size(plist_t node)
 {
     uint32_t ret = 0;
-    if (node && PLIST_DICT == plist_get_node_type(node))
-    {
+    if (PLIST_IS_DICT(node)) {
         ret = node_n_children((node_t)node) / 2;
     }
     return ret;
@@ -1253,9 +1261,8 @@ void plist_dict_free_iter(plist_dict_iter iter)
 
 void plist_dict_get_item_key(plist_t node, char **key)
 {
-    plist_t father = plist_get_parent(node);
-    if (PLIST_DICT == plist_get_node_type(father))
-    {
+    plist_t parent = plist_get_parent(node);
+    if (PLIST_IS_DICT(parent)) {
         plist_get_key_val( (plist_t) node_prev_sibling((node_t)node), key);
     }
 }
@@ -1263,9 +1270,8 @@ void plist_dict_get_item_key(plist_t node, char **key)
 plist_t plist_dict_item_get_key(plist_t node)
 {
     plist_t ret = NULL;
-    plist_t father = plist_get_parent(node);
-    if (PLIST_DICT == plist_get_node_type(father))
-    {
+    plist_t parent = plist_get_parent(node);
+    if (PLIST_IS_DICT(parent)) {
         ret = (plist_t)node_prev_sibling((node_t)node);
     }
     return ret;
@@ -1311,17 +1317,17 @@ plist_t plist_dict_get_item(plist_t node, const char* key)
     return ret;
 }
 
-void plist_dict_set_item(plist_t node, const char* key, plist_t item)
+plist_err_t plist_dict_set_item(plist_t node, const char* key, plist_t item)
 {
     if (!PLIST_IS_DICT(node) || !key || !item) {
         PLIST_ERR("invalid argument passed to %s (node=%p, key=%p, item=%p)\n", __func__, node, key, item);
-        return;
+        return PLIST_ERR_INVALID_ARG;
     }
     node_t it = (node_t)item;
     if (it->parent != NULL) {
         assert(it->parent == NULL && "item already has a parent");
         PLIST_ERR("%s: item already has a parent\n", __func__);
-        return;
+        return PLIST_ERR_INVALID_ARG;
     }
 
     hashtable_t *ht = (hashtable_t*)((plist_data_t)((node_t)node)->data)->hashtable;
@@ -1335,18 +1341,18 @@ void plist_dict_set_item(plist_t node, const char* key, plist_t item)
         node_t old_key = node_prev_sibling(old_val);
         if (!old_key) {
             PLIST_ERR("%s: corrupt dict (value without key)\n", __func__);
-            return;
+            return PLIST_ERR_UNKNOWN;
         }
         if (!PLIST_IS_KEY((plist_t)old_key)) {
             PLIST_ERR("%s: corrupt dict ('key' node is not PLIST_KEY\n", __func__);
-            return;
+            return PLIST_ERR_UNKNOWN;
         }
 
         // detach old value (do NOT free yet)
         int idx = node_detach((node_t)node, old_val);
         if (idx < 0) {
             PLIST_ERR("%s: failed to detach old value (err=%d)\n", __func__, idx);
-            return;
+            return PLIST_ERR_UNKNOWN;
         }
 
         // insert new value at same position
@@ -1358,7 +1364,7 @@ void plist_dict_set_item(plist_t node, const char* key, plist_t item)
                 hash_table_insert(ht, ((node_t)old_key)->data, old_item);
             }
             PLIST_ERR("%s: failed to replace dict value (err=%d)\n", __func__, r);
-            return;
+            return PLIST_ERR_UNKNOWN;
         }
         key_node = old_key;
 
@@ -1372,13 +1378,13 @@ void plist_dict_set_item(plist_t node, const char* key, plist_t item)
     } else {
         // --- INSERT NEW KEY/VALUE PAIR ---
         key_node = plist_new_key(key);
-        if (!key_node) return;
+        if (!key_node) return PLIST_ERR_NO_MEM;
 
         int r = node_attach((node_t)node, (node_t)key_node);
         if (r != NODE_ERR_SUCCESS) {
             plist_free_node((node_t)key_node);
             PLIST_ERR("%s: failed to attach dict key (err=%d)\n", __func__, r);
-            return;
+            return PLIST_ERR_UNKNOWN;
         }
         r = node_attach((node_t)node, (node_t)item);
         if (r != NODE_ERR_SUCCESS) {
@@ -1386,7 +1392,7 @@ void plist_dict_set_item(plist_t node, const char* key, plist_t item)
             node_detach((node_t)node, (node_t)key_node);
             plist_free_node((node_t)key_node);
             PLIST_ERR("%s: failed to attach dict value (err=%d)\n", __func__, r);
-            return;
+            return PLIST_ERR_UNKNOWN;
         }
 
         if (ht) {
@@ -1406,37 +1412,44 @@ void plist_dict_set_item(plist_t node, const char* key, plist_t item)
             ((plist_data_t)((node_t)node)->data)->hashtable = ht;
         }
     }
+    return PLIST_ERR_SUCCESS;
 }
 
-void plist_dict_remove_item(plist_t node, const char* key)
+plist_err_t plist_dict_remove_item(plist_t node, const char* key)
 {
-    if (node && PLIST_DICT == plist_get_node_type(node))
-    {
-        plist_t old_item = plist_dict_get_item(node, key);
-        if (old_item)
-        {
-            plist_t key_node = node_prev_sibling((node_t)old_item);
-            hashtable_t* ht = (hashtable_t*)((plist_data_t)((node_t)node)->data)->hashtable;
-            if (ht) {
-                hash_table_remove(ht, ((node_t)key_node)->data);
-            }
-            plist_free(key_node);
-            plist_free(old_item);
-        }
+    if (!PLIST_IS_DICT(node) || !key) {
+        PLIST_ERR("invalid argument passed to %s (node=%p, key=%p)\n", __func__, node, key);
+        return PLIST_ERR_INVALID_ARG;
     }
+
+    plist_t old_item = plist_dict_get_item(node, key);
+    if (!old_item) {
+        PLIST_ERR("item not found for key '%s'\n", key);
+        return PLIST_ERR_INVALID_ARG;
+    }
+
+    plist_t key_node = node_prev_sibling((node_t)old_item);
+    hashtable_t* ht = (hashtable_t*)((plist_data_t)((node_t)node)->data)->hashtable;
+    if (ht) {
+        hash_table_remove(ht, ((node_t)key_node)->data);
+    }
+    plist_free(key_node);
+    plist_free(old_item);
+
+    return PLIST_ERR_SUCCESS;
 }
 
-void plist_dict_merge(plist_t *target, plist_t source)
+plist_err_t plist_dict_merge(plist_t *target, plist_t source)
 {
-	if (!target || !*target || (plist_get_node_type(*target) != PLIST_DICT) || !source || (plist_get_node_type(source) != PLIST_DICT))
-		return;
+	if (!target || !PLIST_IS_DICT(*target) || !PLIST_IS_DICT(source))
+		return PLIST_ERR_INVALID_ARG;
 
 	char* key = NULL;
 	plist_dict_iter it = NULL;
 	plist_t subnode = NULL;
 	plist_dict_new_iter(source, &it);
 	if (!it)
-		return;
+		return PLIST_ERR_NO_MEM;
 
 	do {
 		plist_dict_next_item(source, it, &key, &subnode);
@@ -1448,6 +1461,7 @@ void plist_dict_merge(plist_t *target, plist_t source)
 		key = NULL;
 	} while (1);
 	free(it);
+	return PLIST_ERR_SUCCESS;
 }
 
 uint8_t plist_dict_get_bool(plist_t dict, const char *key)
@@ -2010,8 +2024,8 @@ static plist_err_t plist_set_element_val(plist_t node, plist_type type, const vo
 
 void plist_set_key_val(plist_t node, const char *val)
 {
-    plist_t father = plist_get_parent(node);
-    plist_t item = plist_dict_get_item(father, val);
+    plist_t parent = plist_get_parent(node);
+    plist_t item = plist_dict_get_item(parent, val);
     if (item) {
         return;
     }
