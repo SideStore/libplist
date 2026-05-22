@@ -854,7 +854,7 @@ static plist_t parse_bin_node_at_index(struct bplist_data *bplist, uint32_t node
 
     uint64_t node_offset = UINT_TO_HOST(idx_ptr, bplist->offset_size);
     if (node_offset > (uint64_t)bplist->size) {
-        PLIST_BIN_ERR("node offset overflow (%llu)\n", node_offset);
+        PLIST_BIN_ERR("node offset overflow (%" PRIu64 ")\n", node_offset);
         bplist->err = PLIST_ERR_PARSE;
         return NULL;
     }
