@@ -190,17 +190,23 @@ static plist_err_t node_to_string(node_t node, bytearray_t **outbuf, uint32_t de
         } break;
     case PLIST_DATA:
         {
-            val = (char*)malloc(4096);
+#define BASE64_CHUNK_SIZE 3072
+#define BASE64_BUF_SIZE  (4 * ((BASE64_CHUNK_SIZE + 2) / 3) + 4)
+            val = (char*)malloc(BASE64_BUF_SIZE);
+            if (!val) return PLIST_ERR_NO_MEM;
             size_t done = 0;
             while (done < node_data->length) {
                 size_t amount = node_data->length - done;
-                if (amount > 3072) {
-                    amount = 3072;
+                if (amount > BASE64_CHUNK_SIZE) {
+                    amount = BASE64_CHUNK_SIZE;
                 }
                 size_t bsize = base64encode(val, node_data->buff + done, amount);
                 str_buf_append(*outbuf, val, bsize);
                 done += amount;
             }
+            free(val);
+#undef BASE64_CHUNK_SIZE
+#undef BASE64_BUF_SIZE
         }
         break;
     case PLIST_DATE:
