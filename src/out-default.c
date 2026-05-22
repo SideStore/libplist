@@ -44,17 +44,27 @@
 
 static size_t dtostr(char *buf, size_t bufsize, double realval)
 {
-    size_t len = 0;
+    int slen = 0;
     if (isnan(realval)) {
-        len = snprintf(buf, bufsize, "nan");
+        slen = snprintf(buf, bufsize, "nan");
     } else if (isinf(realval)) {
-        len = snprintf(buf, bufsize, "%cinfinity", (realval > 0.0) ? '+' : '-');
+        slen = snprintf(buf, bufsize, "%cinfinity", (realval > 0.0) ? '+' : '-');
     } else if (realval == 0.0f) {
-        len = snprintf(buf, bufsize, "0.0");
+        slen = snprintf(buf, bufsize, "0.0");
     } else {
+        slen = snprintf(buf, bufsize, "%.*g", 17, realval);
+        if (slen < 0) {
+            return 0;
+        }
+        if (!buf || bufsize == 0) {
+            return (size_t)slen;
+        }
+        size_t len = (size_t)slen;
+        if (len >= bufsize) {
+            len = bufsize - 1;
+        }
         size_t i = 0;
-        len = snprintf(buf, bufsize, "%.*g", 17, realval);
-        for (i = 0; buf && i < len; i++) {
+        for (i = 0; i < len; i++) {
             if (buf[i] == ',') {
                 buf[i] = '.';
                 break;
@@ -62,8 +72,12 @@ static size_t dtostr(char *buf, size_t bufsize, double realval)
                 break;
             }
         }
+        return len;
     }
-    return len;
+    if (slen < 0) {
+        return 0;
+    }
+    return (size_t)slen;
 }
 
 static plist_err_t node_to_string(node_t node, bytearray_t **outbuf, uint32_t depth, uint32_t indent, int partial_data)
@@ -71,14 +85,19 @@ static plist_err_t node_to_string(node_t node, bytearray_t **outbuf, uint32_t de
     plist_data_t node_data = NULL;
 
     char *val = NULL;
+    int slen = 0;
     size_t val_len = 0;
 
     uint32_t i = 0;
 
-    if (!node)
+    if (!node || !outbuf || !*outbuf) {
         return PLIST_ERR_INVALID_ARG;
+    }
 
     node_data = plist_get_data(node);
+    if (!node_data) {
+        return PLIST_ERR_INVALID_ARG;
+    }
 
     switch (node_data->type)
     {
@@ -98,17 +117,24 @@ static plist_err_t node_to_string(node_t node, bytearray_t **outbuf, uint32_t de
 
     case PLIST_INT:
         val = (char*)malloc(64);
+        if (!val) return PLIST_ERR_NO_MEM;
         if (node_data->length == 16) {
-            val_len = snprintf(val, 64, "%" PRIu64, node_data->intval);
+            slen = snprintf(val, 64, "%" PRIu64, node_data->intval);
         } else {
-            val_len = snprintf(val, 64, "%" PRIi64, node_data->intval);
+            slen = snprintf(val, 64, "%" PRIi64, node_data->intval);
         }
+        if (slen < 0) {
+            free(val);
+            return PLIST_ERR_UNKNOWN;
+        }
+        val_len = (size_t)slen;
         str_buf_append(*outbuf, val, val_len);
         free(val);
         break;
 
     case PLIST_REAL:
         val = (char*)malloc(64);
+        if (!val) return PLIST_ERR_NO_MEM;
         val_len = dtostr(val, 64, node_data->realval);
         str_buf_append(*outbuf, val, val_len);
         free(val);
@@ -116,6 +142,9 @@ static plist_err_t node_to_string(node_t node, bytearray_t **outbuf, uint32_t de
 
     case PLIST_STRING:
     case PLIST_KEY: {
+        if (!node_data->strval && node_data->length > 0) {
+            return PLIST_ERR_INVALID_ARG;
+        }
         const char *charmap[32] = {
             "\\u0000", "\\u0001", "\\u0002", "\\u0003", "\\u0004", "\\u0005", "\\u0006", "\\u0007",
             "\\b",     "\\t",     "\\n",     "\\u000b", "\\f",     "\\r",     "\\u000e", "\\u000f",
@@ -124,8 +153,8 @@ static plist_err_t node_to_string(node_t node, bytearray_t **outbuf, uint32_t de
         };
         size_t j = 0;
         size_t len = 0;
-        off_t start = 0;
-        off_t cur = 0;
+        size_t start = 0;
+        size_t cur = 0;
 
         str_buf_append(*outbuf, "\"", 1);
 
@@ -207,28 +236,32 @@ static plist_err_t node_to_string(node_t node, bytearray_t **outbuf, uint32_t de
         } break;
     case PLIST_DATA:
         {
+            if (!node_data->buff && node_data->length > 0) {
+                return PLIST_ERR_INVALID_ARG;
+            }
             str_buf_append(*outbuf, "<", 1);
             size_t len = node_data->length;
             char charb[4];
+            size_t j;
             if (!partial_data || len <= 24) {
-                for (i = 0; i < len; i++) {
-                    if (i > 0 && (i % 4 == 0))
+                for (j = 0; j < len; j++) {
+                    if (j > 0 && (j % 4 == 0))
                         str_buf_append(*outbuf, " ", 1);
-                    sprintf(charb, "%02x", (unsigned char)node_data->buff[i]);
+                    snprintf(charb, sizeof(charb), "%02x", (unsigned char)node_data->buff[j]);
                     str_buf_append(*outbuf, charb, 2);
                 }
             } else {
-                for (i = 0; i < 16; i++) {
-                    if (i > 0 && (i % 4 == 0))
+                for (j = 0; j < 16; j++) {
+                    if (j > 0 && (j % 4 == 0))
                         str_buf_append(*outbuf, " ", 1);
-                    sprintf(charb, "%02x", (unsigned char)node_data->buff[i]);
+                    snprintf(charb, sizeof(charb), "%02x", (unsigned char)node_data->buff[j]);
                     str_buf_append(*outbuf, charb, 2);
                 }
                 str_buf_append(*outbuf, " ... ", 5);
-                for (i = len - 8; i < len; i++) {
-                    sprintf(charb, "%02x", (unsigned char)node_data->buff[i]);
+                for (j = len - 8; j < len; j++) {
+                    snprintf(charb, sizeof(charb), "%02x", (unsigned char)node_data->buff[j]);
                     str_buf_append(*outbuf, charb, 2);
-                    if (i > 0 && i < len-1 && (i % 4 == 0))
+                    if (j > 0 && j < len-1 && (j % 4 == 0))
                         str_buf_append(*outbuf, " ", 1);
                 }
             }
@@ -242,6 +275,7 @@ static plist_err_t node_to_string(node_t node, bytearray_t **outbuf, uint32_t de
             struct TM *btime = gmtime64_r(&timev, &_btime);
             if (btime) {
                 val = (char*)calloc(1, 26);
+                if (!val) return PLIST_ERR_NO_MEM;
                 struct tm _tmcopy;
                 copy_TM64_to_tm(btime, &_tmcopy);
                 val_len = strftime(val, 26, "%Y-%m-%d %H:%M:%S +0000", &_tmcopy);
@@ -257,11 +291,17 @@ static plist_err_t node_to_string(node_t node, bytearray_t **outbuf, uint32_t de
         {
             str_buf_append(*outbuf, "CF$UID:", 7);
             val = (char*)malloc(64);
+            if (!val) return PLIST_ERR_NO_MEM;
             if (node_data->length == 16) {
-                val_len = snprintf(val, 64, "%" PRIu64, node_data->intval);
+                slen = snprintf(val, 64, "%" PRIu64, node_data->intval);
             } else {
-                val_len = snprintf(val, 64, "%" PRIi64, node_data->intval);
+                slen = snprintf(val, 64, "%" PRIi64, node_data->intval);
             }
+            if (slen < 0) {
+                free(val);
+                return PLIST_ERR_UNKNOWN;
+            }
+            val_len = (size_t)slen;
             str_buf_append(*outbuf, val, val_len);
             free(val);
         }
