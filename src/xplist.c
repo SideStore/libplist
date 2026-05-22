@@ -194,6 +194,7 @@ static plist_err_t node_to_xml(node_t node, bytearray_t **outbuf, uint32_t depth
         {
             Time64_T timev;
             if (plist_real_to_time64(node_data->realval, &timev) < 0) {
+                PLIST_XML_WRITE_ERR("Encountered invalid date value %f\n", node_data->realval);
                 return PLIST_ERR_INVALID_ARG;
             }
             struct TM _btime;

@@ -233,6 +233,9 @@ static plist_err_t node_to_string(node_t node, bytearray_t **outbuf, uint32_t de
         {
             Time64_T timev;
             if (plist_real_to_time64(node_data->realval, &timev) < 0) {
+#if DEBUG
+                fprintf(stderr, "libplist: ERROR: Encountered invalid date value %f\n", node_data->realval);
+#endif
                 return PLIST_ERR_INVALID_ARG;
             }
             struct TM _btime;

@@ -259,6 +259,7 @@ static plist_err_t node_to_json(node_t node, bytearray_t **outbuf, uint32_t dept
         if (coerce) {
             Time64_T timev;
             if (plist_real_to_time64(node_data->realval, &timev) < 0) {
+                PLIST_JSON_WRITE_ERR("Encountered invalid date value %f\n", node_data->realval);
                 return PLIST_ERR_INVALID_ARG;
             }
             struct TM _btime;
