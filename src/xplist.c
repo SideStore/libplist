@@ -48,6 +48,7 @@
 #include "strbuf.h"
 #include "time64.h"
 #include "hashtable.h"
+#include "common.h"
 
 #define XPLIST_KEY	"key"
 #define XPLIST_KEY_LEN 3
@@ -69,8 +70,6 @@
 #define XPLIST_ARRAY_LEN 5
 #define XPLIST_DICT	"dict"
 #define XPLIST_DICT_LEN 4
-
-#define MAC_EPOCH 978307200
 
 #define MAX_DATA_BYTES_PER_LINE(__i) (((76 - ((__i) << 3)) >> 2) * 3)
 
@@ -109,30 +108,6 @@ void plist_xml_set_debug(int debug)
 #if DEBUG
     plist_xml_debug = debug;
 #endif
-}
-
-static size_t dtostr(char *buf, size_t bufsize, double realval)
-{
-    size_t len = 0;
-    if (isnan(realval)) {
-        len = snprintf(buf, bufsize, "nan");
-    } else if (isinf(realval)) {
-        len = snprintf(buf, bufsize, "%cinfinity", (realval > 0.0) ? '+' : '-');
-    } else if (realval == 0.0f) {
-        len = snprintf(buf, bufsize, "0.0");
-    } else {
-        size_t i = 0;
-        len = snprintf(buf, bufsize, "%.*g", 17, realval);
-        for (i = 0; buf && i < len; i++) {
-            if (buf[i] == ',') {
-                buf[i] = '.';
-                break;
-            } else if (buf[i] == '.') {
-                break;
-            }
-        }
-    }
-    return len;
 }
 
 static plist_err_t node_to_xml(node_t node, bytearray_t **outbuf, uint32_t depth)
@@ -420,44 +395,6 @@ static int parse_date(const char *strval, struct TM *btime)
 #endif
     btime->tm_isdst=0;
     return 0;
-}
-
-#define PO10i_LIMIT (INT64_MAX/10)
-
-/* based on https://stackoverflow.com/a/4143288 */
-static int num_digits_i(int64_t i)
-{
-    int n;
-    int64_t po10;
-    n=1;
-    if (i < 0) {
-        i = (i == INT64_MIN) ? INT64_MAX : -i;
-        n++;
-    }
-    po10=10;
-    while (i>=po10) {
-        n++;
-        if (po10 > PO10i_LIMIT) break;
-        po10*=10;
-    }
-    return n;
-}
-
-#define PO10u_LIMIT (UINT64_MAX/10)
-
-/* based on https://stackoverflow.com/a/4143288 */
-static int num_digits_u(uint64_t i)
-{
-    int n;
-    uint64_t po10;
-    n=1;
-    po10=10;
-    while (i>=po10) {
-        n++;
-        if (po10 > PO10u_LIMIT) break;
-        po10*=10;
-    }
-    return n;
 }
 
 static plist_err_t _node_estimate_size(node_t node, uint64_t *size, uint32_t depth, hashtable_t *visited)

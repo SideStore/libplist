@@ -39,8 +39,7 @@
 #include "strbuf.h"
 #include "time64.h"
 #include "hashtable.h"
-
-#define MAC_EPOCH 978307200
+#include "common.h"
 
 #ifdef DEBUG
 static int plist_ostep_debug = 0;
@@ -92,30 +91,6 @@ static char* strndup(const char* str, size_t len)
 #pragma GCC diagnostic pop
 #endif
 #endif
-
-static size_t dtostr(char *buf, size_t bufsize, double realval)
-{
-    size_t len = 0;
-    if (isnan(realval)) {
-        len = snprintf(buf, bufsize, "nan");
-    } else if (isinf(realval)) {
-        len = snprintf(buf, bufsize, "%cinfinity", (realval > 0.0) ? '+' : '-');
-    } else if (realval == 0.0f) {
-        len = snprintf(buf, bufsize, "0.0");
-    } else {
-        size_t i = 0;
-        len = snprintf(buf, bufsize, "%.*g", 17, realval);
-        for (i = 0; buf && i < len; i++) {
-            if (buf[i] == ',') {
-                buf[i] = '.';
-                break;
-            } else if (buf[i] == '.') {
-                break;
-            }
-        }
-    }
-    return len;
-}
 
 static const char allowed_unquoted_chars[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -369,44 +344,6 @@ static plist_err_t node_to_openstep(node_t node, bytearray_t **outbuf, uint32_t 
     }
 
     return PLIST_ERR_SUCCESS;
-}
-
-#define PO10i_LIMIT (INT64_MAX/10)
-
-/* based on https://stackoverflow.com/a/4143288 */
-static int num_digits_i(int64_t i)
-{
-    int n;
-    int64_t po10;
-    n=1;
-    if (i < 0) {
-        i = (i == INT64_MIN) ? INT64_MAX : -i;
-        n++;
-    }
-    po10=10;
-    while (i>=po10) {
-        n++;
-        if (po10 > PO10i_LIMIT) break;
-        po10*=10;
-    }
-    return n;
-}
-
-#define PO10u_LIMIT (UINT64_MAX/10)
-
-/* based on https://stackoverflow.com/a/4143288 */
-static int num_digits_u(uint64_t i)
-{
-    int n;
-    uint64_t po10;
-    n=1;
-    po10=10;
-    while (i>=po10) {
-        n++;
-        if (po10 > PO10u_LIMIT) break;
-        po10*=10;
-    }
-    return n;
 }
 
 static plist_err_t _node_estimate_size(node_t node, uint64_t *size, uint32_t depth, int prettify, int coerce, hashtable_t *visited)

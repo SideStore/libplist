@@ -46,7 +46,7 @@
 #include <hashtable.h>
 #include <ptrarray.h>
 
-#define MAC_EPOCH 978307200
+#include "common.h"
 
 #ifdef _MSC_VER
 typedef SSIZE_T ssize_t;

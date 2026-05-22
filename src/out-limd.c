@@ -41,46 +41,7 @@
 #include "time64.h"
 #include "base64.h"
 #include "hashtable.h"
-
-#define MAC_EPOCH 978307200
-
-static size_t dtostr(char *buf, size_t bufsize, double realval)
-{
-    int slen = 0;
-    if (isnan(realval)) {
-        slen = snprintf(buf, bufsize, "nan");
-    } else if (isinf(realval)) {
-        slen = snprintf(buf, bufsize, "%cinfinity", (realval > 0.0) ? '+' : '-');
-    } else if (realval == 0.0f) {
-        slen = snprintf(buf, bufsize, "0.0");
-    } else {
-        slen = snprintf(buf, bufsize, "%.*g", 17, realval);
-        if (slen < 0) {
-            return 0;
-        }
-        if (!buf || bufsize == 0) {
-            return (size_t)slen;
-        }
-        size_t len = (size_t)slen;
-        if (len >= bufsize) {
-            len = bufsize - 1;
-        }
-        size_t i = 0;
-        for (i = 0; i < len; i++) {
-            if (buf[i] == ',') {
-                buf[i] = '.';
-                break;
-            } else if (buf[i] == '.') {
-                break;
-            }
-        }
-        return len;
-    }
-    if (slen < 0) {
-        return 0;
-    }
-    return (size_t)slen;
-}
+#include "common.h"
 
 static plist_err_t node_to_string(node_t node, bytearray_t **outbuf, uint32_t depth, uint32_t indent)
 {
@@ -302,44 +263,6 @@ static plist_err_t node_to_string(node_t node, bytearray_t **outbuf, uint32_t de
     }
 
     return PLIST_ERR_SUCCESS;
-}
-
-#define PO10i_LIMIT (INT64_MAX/10)
-
-/* based on https://stackoverflow.com/a/4143288 */
-static int num_digits_i(int64_t i)
-{
-    int n;
-    int64_t po10;
-    n=1;
-    if (i < 0) {
-        i = (i == INT64_MIN) ? INT64_MAX : -i;
-        n++;
-    }
-    po10=10;
-    while (i>=po10) {
-        n++;
-        if (po10 > PO10i_LIMIT) break;
-        po10*=10;
-    }
-    return n;
-}
-
-#define PO10u_LIMIT (UINT64_MAX/10)
-
-/* based on https://stackoverflow.com/a/4143288 */
-static int num_digits_u(uint64_t i)
-{
-    int n;
-    uint64_t po10;
-    n=1;
-    po10=10;
-    while (i>=po10) {
-        n++;
-        if (po10 > PO10u_LIMIT) break;
-        po10*=10;
-    }
-    return n;
 }
 
 static plist_err_t _node_estimate_size(node_t node, uint64_t *size, uint32_t depth, uint32_t indent, hashtable_t *visited)
