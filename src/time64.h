@@ -11,6 +11,13 @@ typedef long long       Int64;
 typedef Int64           Time64_T;
 typedef Int64           Year;
 
+#ifndef TIME64_MIN
+#define TIME64_MIN ((Time64_T)INT64_MIN)
+#endif
+
+#ifndef TIME64_MAX
+#define TIME64_MAX ((Time64_T)INT64_MAX)
+#endif
 
 /* A copy of the tm struct but with a 64 bit year */
 struct TM64 {

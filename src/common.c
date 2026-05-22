@@ -98,3 +98,18 @@ int num_digits_u(uint64_t i)
     return n;
 }
 #undef PO10u_LIMIT
+
+int plist_real_to_time64(double realval, Time64_T *timev)
+{
+    if (!timev || !isfinite(realval)) {
+        return -1;
+    }
+
+    if (realval < (double)TIME64_MIN - (double)MAC_EPOCH ||
+        realval > (double)TIME64_MAX - (double)MAC_EPOCH) {
+        return -1;
+    }
+
+    *timev = (Time64_T)realval + MAC_EPOCH;
+    return 0;
+}

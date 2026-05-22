@@ -192,7 +192,10 @@ static plist_err_t node_to_xml(node_t node, bytearray_t **outbuf, uint32_t depth
         tag = XPLIST_DATE;
         tag_len = XPLIST_DATE_LEN;
         {
-            Time64_T timev = (Time64_T)node_data->realval + MAC_EPOCH;
+            Time64_T timev;
+            if (plist_real_to_time64(node_data->realval, &timev) < 0) {
+                return PLIST_ERR_INVALID_ARG;
+            }
             struct TM _btime;
             struct TM *btime = gmtime64_r(&timev, &_btime);
             if (btime) {

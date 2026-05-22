@@ -22,11 +22,13 @@
 #define COMMON_H
 
 #include <stddef.h>
+#include "time64.h"
 
 #define MAC_EPOCH 978307200
 
 size_t dtostr(char *buf, size_t bufsize, double realval);
 int num_digits_i(int64_t i);
 int num_digits_u(uint64_t i);
+int plist_real_to_time64(double realval, Time64_T *timev);
 
 #endif
