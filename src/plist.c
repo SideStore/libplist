@@ -2506,7 +2506,7 @@ void plist_print(plist_t plist)
 const char* libplist_version()
 {
 #ifndef PACKAGE_VERSION
-#error PACKAGE_VERSION is not defined!
+#define PACKAGE_VERSION "2.7.0"
 #endif
 	return PACKAGE_VERSION;
 }

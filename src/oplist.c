@@ -73,7 +73,7 @@ void plist_ostep_set_debug(int debug)
 #endif
 }
 
-#ifndef HAVE_STRNDUP
+#if !defined(HAVE_STRNDUP) && !defined(__APPLE__)
 #ifndef _MSC_VER
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wshadow"
